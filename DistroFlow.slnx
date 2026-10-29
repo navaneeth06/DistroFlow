@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DistroFlow.Api/DistroFlow.Api.csproj" />
+    <Project Path="src/DistroFlow.Application/DistroFlow.Application.csproj" />
+    <Project Path="src/DistroFlow.Domain/DistroFlow.Domain.csproj" />
+    <Project Path="src/DistroFlow.Infrastructure/DistroFlow.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DistroFlow.UnitTests/DistroFlow.UnitTests.csproj" />
+  </Folder>
+</Solution>
