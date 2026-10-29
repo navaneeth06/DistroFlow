@@ -1,0 +1,17 @@
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: distroflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: distroflow_dev
+      POSTGRES_USER: distroflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - distroflow_pgdata:/var/lib/postgresql
+
+volumes:
+  distroflow_pgdata:
