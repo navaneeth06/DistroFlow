@@ -18,8 +18,4 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\DistroFlow.Domain\DistroFlow.Domain.csproj" />
-  </ItemGroup>
-
 </Project>

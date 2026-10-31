@@ -6,6 +6,7 @@
     <Project Path="src/DistroFlow.Infrastructure/DistroFlow.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/DistroFlow.IntegrationTests/DistroFlow.IntegrationTests.csproj" />
     <Project Path="tests/DistroFlow.UnitTests/DistroFlow.UnitTests.csproj" />
   </Folder>
 </Solution>
