@@ -1,10 +1,12 @@
-
+using DistroFlow.Application.Interfaces.Services;
 using DistroFlow.Infrastructure.Persistence;
+using DistroFlow.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddControllers();
 
 var connectionString = builder.Configuration
     .GetConnectionString("DefaultConnection")
@@ -13,6 +15,8 @@ var connectionString = builder.Configuration
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+builder.Services.AddScoped<ITenantService, TenantService>();
 
 var app = builder.Build();
 
@@ -35,5 +39,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.MapControllers();
 
 app.Run();
