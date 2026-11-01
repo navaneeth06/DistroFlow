@@ -1,3 +1,4 @@
+
 namespace DistroFlow.Domain.Entities;
 
 public class Tenant
@@ -17,4 +18,10 @@ public class Tenant
     public int FiscalYearStartMonth { get; set; } = 4;
 
     public string TimeZoneId { get; set; } = "Asia/Kolkata";
+
+    public bool IsActive { get; set; } = true;
+
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAtUtc { get; set; }
 }

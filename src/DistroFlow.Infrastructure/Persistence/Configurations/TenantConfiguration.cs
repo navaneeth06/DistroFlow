@@ -33,6 +33,14 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
             .HasMaxLength(64)
             .IsRequired();
 
+        builder.Property(t => t.IsActive)
+    .IsRequired();
+
+        builder.Property(t => t.CreatedAtUtc)
+            .IsRequired();
+
+        builder.Property(t => t.UpdatedAtUtc);
+
         builder.ToTable(table =>
             table.HasCheckConstraint(
                 "CK_Tenants_FiscalYearStartMonth",

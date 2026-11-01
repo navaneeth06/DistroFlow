@@ -22,7 +22,10 @@ namespace DistroFlow.Infrastructure.Persistence.Migrations
                     CurrencyCode = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     InvoicePrefix = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
                     FiscalYearStartMonth = table.Column<int>(type: "integer", nullable: false),
-                    TimeZoneId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false)
+                    TimeZoneId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
