@@ -1,8 +1,10 @@
-using DistroFlow.Application.Interfaces.Services;
 using DistroFlow.Application.DTOs.Common;
 using Microsoft.AspNetCore.Mvc;
 using DistroFlow.Infrastructure.Persistence;
-using DistroFlow.Infrastructure.Services;
+using DistroFlow.Application.Services;
+using DistroFlow.Application.Interfaces.Repositories;
+using DistroFlow.Application.Interfaces.Services;
+using DistroFlow.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +42,7 @@ var connectionString = builder.Configuration
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ITenantService, TenantService>();
 
 var app = builder.Build();
