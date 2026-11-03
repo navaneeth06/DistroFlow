@@ -1,4 +1,6 @@
 using DistroFlow.Application.Interfaces.Services;
+using DistroFlow.Application.DTOs.Common;
+using Microsoft.AspNetCore.Mvc;
 using DistroFlow.Infrastructure.Persistence;
 using DistroFlow.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +8,29 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.Value!.Errors
+                        .Select(e => e.ErrorMessage)
+                        .ToArray()
+                );
+
+            var response = ApiResponse<object>.FailureResponse(
+                "Validation failed.",
+                errors
+            );
+
+            return new BadRequestObjectResult(response);
+        };
+    });
 
 var connectionString = builder.Configuration
     .GetConnectionString("DefaultConnection")
@@ -43,3 +67,4 @@ app.UseHttpsRedirection();
 app.MapControllers();
 
 app.Run();
+public partial class Program { }
