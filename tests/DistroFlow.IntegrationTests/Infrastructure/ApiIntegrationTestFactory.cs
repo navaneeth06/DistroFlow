@@ -3,7 +3,7 @@ using DistroFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
@@ -35,19 +35,17 @@ public class ApiIntegrationTestFactory
         await dbContext.Database.MigrateAsync();
     }
 
-    protected override void ConfigureWebHost(
-        IWebHostBuilder builder)
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+{
+    builder.ConfigureServices(services =>
     {
-        builder.ConfigureAppConfiguration((_, configuration) =>
-        {
-            configuration.AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:DefaultConnection"] =
-                        _postgres.GetConnectionString()
-                });
-        });
-    }
+        services.RemoveAll<DbContextOptions<AppDbContext>>();
+        services.RemoveAll<AppDbContext>();
+
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseNpgsql(_postgres.GetConnectionString()));
+    });
+}
 
     public new async Task DisposeAsync()
     {
