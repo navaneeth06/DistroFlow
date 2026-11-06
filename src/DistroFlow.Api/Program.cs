@@ -7,6 +7,7 @@ using DistroFlow.Application.Interfaces.Services;
 using DistroFlow.Infrastructure.Repositories;
 using DistroFlow.Infrastructure.Identity;
 using DistroFlow.Application.Interfaces.Identity;
+using DistroFlow.Application.Interfaces.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -64,6 +65,9 @@ builder.Services
     .AddEntityFrameworkStores<AppDbContext>();
 
 builder.Services.AddScoped<IIdentityService, IdentityService>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ITenantService, TenantService>();
