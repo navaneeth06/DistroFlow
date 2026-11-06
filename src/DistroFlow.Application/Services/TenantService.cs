@@ -15,29 +15,6 @@ public class TenantService : ITenantService
         _tenantRepository = tenantRepository;
     }
 
-    public async Task<TenantResponse> CreateAsync(
-        CreateTenantRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var tenant = new Tenant
-        {
-            Name = request.Name.Trim(),
-            Email = request.Email?.Trim(),
-            Phone = request.Phone?.Trim(),
-            CurrencyCode = request.CurrencyCode.Trim().ToUpperInvariant(),
-            InvoicePrefix = request.InvoicePrefix.Trim().ToUpperInvariant(),
-            FiscalYearStartMonth = request.FiscalYearStartMonth,
-            TimeZoneId = request.TimeZoneId.Trim(),
-            CreatedAtUtc = DateTime.UtcNow
-        };
-
-        _tenantRepository.Add(tenant);
-
-        await _tenantRepository.SaveChangesAsync(cancellationToken);
-
-        return MapToResponse(tenant);
-    }
-
     public async Task<TenantResponse?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)

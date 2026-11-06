@@ -1,5 +1,6 @@
 
 using System.Net;
+using DistroFlow.Domain.Entities;
 using DistroFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,70 +25,21 @@ public class TenantsControllerTests
 
   
     [Fact]
-    public async Task CreateTenant_WithValidRequest_PersistsTenantInDatabase()
+    public async Task CreateTenant_ViaTenantsEndpoint_IsNotAllowed()
     {
-        // Arrange
-        var request = new
-        {
-            name = "Persistence Test Distributors",
-            email = "persistence@test.com",
-            currencyCode = "INR",
-            invoicePrefix = "PST",
-            fiscalYearStartMonth = 4,
-            timeZoneId = "Asia/Kolkata"
-        };
+        // Tenants are created only through /api/v1/auth/register, together with their owner.
+        var request = new { name = "Should Not Be Created", timeZoneId = "Asia/Kolkata" };
 
-        // Act
-        var response = await _client.PostAsJsonAsync(
-            "/api/v1/tenants",
-            request);
+        var response = await _client.PostAsJsonAsync("/api/v1/tenants", request);
 
-        // Assert
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        var tenantId = body
-            .GetProperty("data")
-            .GetProperty("id")
-            .GetGuid();
-
-        // Verify persistence using EF Core
-        using var scope = _factory.Services.CreateScope();
-
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<AppDbContext>();
-
-        var savedTenant = await dbContext.Tenants
-            .AsNoTracking()
-            .SingleOrDefaultAsync(t => t.Id == tenantId);
-
-        Assert.NotNull(savedTenant);
-
-        Assert.Equal(
-            "Persistence Test Distributors",
-            savedTenant.Name
-        );
-
-        Assert.Equal("INR", savedTenant.CurrencyCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
-   
     [Fact]
     public async Task GetAllTenants_ReturnsTenantList()
     {
         // Arrange
-        var request = new
-        {
-            name = "GetAll Test Distributors",
-            email = "getall@test.com",
-            currencyCode = "INR",
-            invoicePrefix = "GET",
-            fiscalYearStartMonth = 4,
-            timeZoneId = "Asia/Kolkata"
-        };
-
-        await _client.PostAsJsonAsync("/api/v1/tenants", request);
+        await SeedTenantAsync("GetAll Test Distributors");
 
         // Act
         var response = await _client.GetAsync("/api/v1/tenants");
@@ -114,27 +66,7 @@ public class TenantsControllerTests
     public async Task GetTenantById_WithExistingId_ReturnsTenant()
     {
         // Arrange
-        var request = new
-        {
-            name = "GetById Test Distributors",
-            email = "getbyid@test.com",
-            currencyCode = "INR",
-            invoicePrefix = "GID",
-            fiscalYearStartMonth = 4,
-            timeZoneId = "Asia/Kolkata"
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/v1/tenants",
-            request);
-
-        var createdBody = await createResponse.Content
-            .ReadFromJsonAsync<JsonElement>();
-
-        var tenantId = createdBody
-            .GetProperty("data")
-            .GetProperty("id")
-            .GetGuid();
+        var tenantId = await SeedTenantAsync("GetById Test Distributors");
 
         // Act
         var response = await _client.GetAsync(
@@ -189,27 +121,7 @@ public class TenantsControllerTests
     public async Task UpdateTenant_WithExistingId_UpdatesTenant()
     {
         // Arrange
-        var createRequest = new
-        {
-            name = "Original Distributor",
-            email = "original@test.com",
-            currencyCode = "INR",
-            invoicePrefix = "ORG",
-            fiscalYearStartMonth = 4,
-            timeZoneId = "Asia/Kolkata"
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/v1/tenants",
-            createRequest);
-
-        var createdBody = await createResponse.Content
-            .ReadFromJsonAsync<JsonElement>();
-
-        var tenantId = createdBody
-            .GetProperty("data")
-            .GetProperty("id")
-            .GetGuid();
+        var tenantId = await SeedTenantAsync("Original Distributor");
 
         var updateRequest = new
         {
@@ -291,27 +203,7 @@ public class TenantsControllerTests
     public async Task DeactivateTenant_WithExistingId_DeactivatesTenant()
     {
         // Arrange
-        var createRequest = new
-        {
-            name = "Deactivate Test Distributor",
-            email = "deactivate@test.com",
-            currencyCode = "INR",
-            invoicePrefix = "DEC",
-            fiscalYearStartMonth = 4,
-            timeZoneId = "Asia/Kolkata"
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/v1/tenants",
-            createRequest);
-
-        var createdBody = await createResponse.Content
-            .ReadFromJsonAsync<JsonElement>();
-
-        var tenantId = createdBody
-            .GetProperty("data")
-            .GetProperty("id")
-            .GetGuid();
+        var tenantId = await SeedTenantAsync("Deactivate Test Distributor");
 
         // Act
         var response = await _client.PatchAsync(
@@ -342,27 +234,7 @@ public class TenantsControllerTests
     public async Task DeactivateTenant_WhenAlreadyInactive_ReturnsSuccess()
     {
         // Arrange
-        var createRequest = new
-        {
-            name = "Already Inactive Distributor",
-            email = "inactive@test.com",
-            currencyCode = "INR",
-            invoicePrefix = "INA",
-            fiscalYearStartMonth = 4,
-            timeZoneId = "Asia/Kolkata"
-        };
-
-        var createResponse = await _client.PostAsJsonAsync(
-            "/api/v1/tenants",
-            createRequest);
-
-        var createdBody = await createResponse.Content
-            .ReadFromJsonAsync<JsonElement>();
-
-        var tenantId = createdBody
-            .GetProperty("data")
-            .GetProperty("id")
-            .GetGuid();
+        var tenantId = await SeedTenantAsync("Already Inactive Distributor");
 
         // First deactivation
         var firstResponse = await _client.PatchAsync(
@@ -411,5 +283,20 @@ public class TenantsControllerTests
             JsonValueKind.Null,
             body.GetProperty("data").ValueKind
         );
+    }
+
+    private async Task<Guid> SeedTenantAsync(string name)
+    {
+        using var scope = _factory.Services.CreateScope();
+
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+
+        var tenant = new Tenant { Name = name };
+
+        dbContext.Tenants.Add(tenant);
+        await dbContext.SaveChangesAsync();
+
+        return tenant.Id;
     }
 }

@@ -16,21 +16,7 @@ public class TenantsController : ControllerBase
         _tenantService = tenantService;
     }
 
-    [HttpPost]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateTenantRequest request,
-        CancellationToken cancellationToken)
-    {
-        var tenant = await _tenantService.CreateAsync(
-            request, cancellationToken);
-
-        return StatusCode(
-            StatusCodes.Status201Created,
-            ApiResponse<TenantResponse>.SuccessResponse(
-                tenant,
-                "Tenant created successfully."));
-    }
-
+    // Tenants are created only through POST /api/v1/auth/register, together with their owner.
     [HttpGet]
     public async Task<IActionResult> GetAll(
         CancellationToken cancellationToken)
