@@ -5,6 +5,8 @@ using DistroFlow.Application.Services;
 using DistroFlow.Application.Interfaces.Repositories;
 using DistroFlow.Application.Interfaces.Services;
 using DistroFlow.Infrastructure.Repositories;
+using DistroFlow.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,6 +43,24 @@ var connectionString = builder.Configuration
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+// Identity for employee logins: UserManager/RoleManager backed by EF Core.
+// AddIdentityCore (not AddIdentity) skips cookie/UI defaults; the API's auth scheme is added separately.
+builder.Services
+    .AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.Password.RequiredLength = 8;
+
+        // Email is the login. Uniqueness among *active* accounts is enforced by a
+        // partial unique index in the database, so Identity's global check stays off.
+        options.User.RequireUniqueEmail = false;
+
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    })
+    .AddRoles<IdentityRole<Guid>>()
+    .AddEntityFrameworkStores<AppDbContext>();
 
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ITenantService, TenantService>();

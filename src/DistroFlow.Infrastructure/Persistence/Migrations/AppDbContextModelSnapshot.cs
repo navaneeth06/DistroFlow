@@ -244,6 +244,43 @@ namespace DistroFlow.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("RoleNameIndex");
 
                     b.ToTable("AspNetRoles", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("c2281575-f1a9-41f8-810d-f53174c2b4d1"),
+                            ConcurrencyStamp = "c2281575-f1a9-41f8-810d-f53174c2b4d1",
+                            Name = "Administrator",
+                            NormalizedName = "ADMINISTRATOR"
+                        },
+                        new
+                        {
+                            Id = new Guid("b4f5e138-6741-45bb-a395-c971dc8e7962"),
+                            ConcurrencyStamp = "b4f5e138-6741-45bb-a395-c971dc8e7962",
+                            Name = "Sales Staff",
+                            NormalizedName = "SALES STAFF"
+                        },
+                        new
+                        {
+                            Id = new Guid("a3a51997-11f6-480c-8c9d-28210ab7e385"),
+                            ConcurrencyStamp = "a3a51997-11f6-480c-8c9d-28210ab7e385",
+                            Name = "Dispatch Staff",
+                            NormalizedName = "DISPATCH STAFF"
+                        },
+                        new
+                        {
+                            Id = new Guid("42e5faac-8ca2-41e8-98bc-f842f205e9aa"),
+                            ConcurrencyStamp = "42e5faac-8ca2-41e8-98bc-f842f205e9aa",
+                            Name = "Approver",
+                            NormalizedName = "APPROVER"
+                        },
+                        new
+                        {
+                            Id = new Guid("295f85df-e212-4cbc-8ee1-48b3c6ec2fee"),
+                            ConcurrencyStamp = "295f85df-e212-4cbc-8ee1-48b3c6ec2fee",
+                            Name = "Accounts Staff",
+                            NormalizedName = "ACCOUNTS STAFF"
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
