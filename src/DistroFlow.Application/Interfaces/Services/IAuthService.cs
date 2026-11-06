@@ -7,4 +7,8 @@ public interface IAuthService
     Task<RegisterDistributorResult> RegisterDistributorAsync(
         RegisterDistributorRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<LoginResult> LoginAsync(
+        LoginRequest request,
+        CancellationToken cancellationToken = default);
 }

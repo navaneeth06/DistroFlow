@@ -13,18 +13,62 @@ public class AuthService : IAuthService
     private readonly ITenantRepository _tenantRepository;
     private readonly IEmployeeRepository _employeeRepository;
     private readonly IIdentityService _identityService;
+    private readonly ITokenService _tokenService;
     private readonly IUnitOfWork _unitOfWork;
 
     public AuthService(
         ITenantRepository tenantRepository,
         IEmployeeRepository employeeRepository,
         IIdentityService identityService,
+        ITokenService tokenService,
         IUnitOfWork unitOfWork)
     {
         _tenantRepository = tenantRepository;
         _employeeRepository = employeeRepository;
         _identityService = identityService;
+        _tokenService = tokenService;
         _unitOfWork = unitOfWork;
+    }
+
+    public async Task<LoginResult> LoginAsync(
+        LoginRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var credentials = await _identityService.CheckCredentialsAsync(
+            request.Email, request.Password, cancellationToken);
+
+        if (!credentials.Succeeded)
+        {
+            // Locked-out is reported the same as a wrong password: only an existing
+            // account can be locked, so a distinct message would reveal the email exists.
+            return LoginResult.Failure(LoginError.InvalidCredentials);
+        }
+
+        var tenant = await _tenantRepository.GetByIdReadOnlyAsync(credentials.TenantId, cancellationToken);
+        if (tenant is null || !tenant.IsActive)
+        {
+            // Safe to say: the caller has already proven they own the account.
+            return LoginResult.Failure(LoginError.TenantSuspended);
+        }
+
+        var employee = await _employeeRepository.GetByUserIdReadOnlyAsync(credentials.UserId, cancellationToken);
+        if (employee is null || !employee.IsActive)
+        {
+            // Login and employee status are updated together, so this is a safety net.
+            return LoginResult.Failure(LoginError.InvalidCredentials);
+        }
+
+        var token = _tokenService.CreateAccessToken(new TokenSubject(
+            credentials.UserId,
+            employee.Id,
+            tenant.Id,
+            credentials.Roles));
+
+        return LoginResult.Success(new LoginResponse
+        {
+            AccessToken = token.Token,
+            ExpiresAtUtc = token.ExpiresAtUtc
+        });
     }
 
     /// <summary>

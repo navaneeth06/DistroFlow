@@ -16,4 +16,13 @@ public interface IIdentityService
         string password,
         string role,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks email + password against the single active account with that email.
+    /// Counts failed attempts and enforces lockout.
+    /// </summary>
+    Task<CredentialCheckResult> CheckCredentialsAsync(
+        string email,
+        string password,
+        CancellationToken cancellationToken = default);
 }

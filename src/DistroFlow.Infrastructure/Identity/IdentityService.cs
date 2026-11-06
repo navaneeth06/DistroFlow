@@ -83,6 +83,47 @@ public class IdentityService : IIdentityService
         return CreateUserResult.Success(user.Id);
     }
 
+    public async Task<CredentialCheckResult> CheckCredentialsAsync(
+        string email,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail = _userManager.NormalizeEmail(email.Trim());
+
+        // The partial unique index guarantees at most one active account per email,
+        // so login needs no "which distributor?" input.
+        var user = await _userManager.Users.SingleOrDefaultAsync(
+            u => u.NormalizedEmail == normalizedEmail && u.IsActive,
+            cancellationToken);
+
+        if (user is null)
+        {
+            // Hash anyway so "unknown email" takes about as long as "wrong password";
+            // otherwise response time reveals which emails have accounts.
+            _userManager.PasswordHasher.HashPassword(new ApplicationUser(), password);
+            return CredentialCheckResult.Failure(CredentialCheckError.InvalidCredentials);
+        }
+
+        // Checked before the password so a locked account cannot keep being brute-forced.
+        if (await _userManager.IsLockedOutAsync(user))
+        {
+            _logger.LogWarning("Login rejected for locked-out user {UserId}", user.Id);
+            return CredentialCheckResult.Failure(CredentialCheckError.LockedOut);
+        }
+
+        if (!await _userManager.CheckPasswordAsync(user, password))
+        {
+            // Increments the failed count and locks the account once it reaches the limit.
+            await _userManager.AccessFailedAsync(user);
+            return CredentialCheckResult.Failure(CredentialCheckError.InvalidCredentials);
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+
+        var roles = await _userManager.GetRolesAsync(user);
+        return CredentialCheckResult.Success(user.Id, user.TenantId, roles.ToList());
+    }
+
     private static bool IsActiveEmailViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException
         {

@@ -49,4 +49,30 @@ public class AuthController : ControllerBase
             _ => throw new InvalidOperationException($"Unhandled registration error: {result.Error}")
         };
     }
+
+    /// <summary>Exchanges email + password for a JWT access token.</summary>
+    [AllowAnonymous]
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(
+        [FromBody] LoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.LoginAsync(request, cancellationToken);
+
+        return result.Error switch
+        {
+            LoginError.None => Ok(
+                ApiResponse<LoginResponse>.SuccessResponse(result.Response, "Login successful.")),
+
+            LoginError.InvalidCredentials => Unauthorized(
+                ApiResponse<object>.FailureResponse("Invalid email or password.")),
+
+            LoginError.TenantSuspended => StatusCode(
+                StatusCodes.Status403Forbidden,
+                ApiResponse<object>.FailureResponse(
+                    "This distributor account is suspended. Contact support.")),
+
+            _ => throw new InvalidOperationException($"Unhandled login error: {result.Error}")
+        };
+    }
 }
