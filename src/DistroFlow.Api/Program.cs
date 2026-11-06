@@ -6,6 +6,7 @@ using DistroFlow.Application.Interfaces.Repositories;
 using DistroFlow.Application.Interfaces.Services;
 using DistroFlow.Infrastructure.Repositories;
 using DistroFlow.Infrastructure.Identity;
+using DistroFlow.Application.Interfaces.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,6 +62,8 @@ builder.Services
     })
     .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<AppDbContext>();
+
+builder.Services.AddScoped<IIdentityService, IdentityService>();
 
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ITenantService, TenantService>();
