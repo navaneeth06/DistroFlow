@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DistroFlow.Domain\DistroFlow.Domain.csproj" />
+    <ProjectReference Include="..\..\src\DistroFlow.Infrastructure\DistroFlow.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

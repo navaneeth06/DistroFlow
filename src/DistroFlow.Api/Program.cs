@@ -65,6 +65,15 @@ builder.Services
     .AddEntityFrameworkStores<AppDbContext>();
 
 builder.Services.AddScoped<IIdentityService, IdentityService>();
+
+// JWT access tokens. The signing key is a secret: user-secrets in dev, env var Jwt__SigningKey in prod.
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
