@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using DistroFlow.Application.Interfaces.Identity;
 using DistroFlow.Domain.Constants;
 using DistroFlow.Domain.Entities;
@@ -126,7 +125,7 @@ public class EmployeesControllerTests : IClassFixture<ApiIntegrationTestFactory>
         var mail = _factory.Emails.SingleTo(email);
         Assert.Contains("Anita Rao", mail.HtmlBody);
         Assert.Contains(a.BusinessName, mail.Subject);
-        var (userId, token) = ParseSetPasswordLink(mail.TextBody);
+        var (userId, token) = FakeEmailSender.ParseSetPasswordLink(mail.TextBody);
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -305,13 +304,6 @@ public class EmployeesControllerTests : IClassFixture<ApiIntegrationTestFactory>
 
     private static object InviteBody(string email, string fullName, string[] roles, string? employeeCode = null) =>
         new { fullName, email, phone = "+919876543210", employeeCode, roles };
-
-    private static (Guid UserId, string Token) ParseSetPasswordLink(string text)
-    {
-        var match = Regex.Match(text, @"/set-password\?userId=(?<userId>[^&\s]+)&token=(?<token>\S+)");
-        Assert.True(match.Success, "Email does not contain a set-password link.");
-        return (Guid.Parse(match.Groups["userId"].Value), Uri.UnescapeDataString(match.Groups["token"].Value));
-    }
 
     private async Task<List<Guid>> ListIdsAsync(RegisteredDistributor distributor)
     {

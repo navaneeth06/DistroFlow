@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using DistroFlow.Application.Interfaces.Email;
 
 namespace DistroFlow.IntegrationTests.Infrastructure;
@@ -29,4 +30,18 @@ public sealed class FakeEmailSender : IEmailSender
     /// <summary>The single email sent to this address (tests share one sender, so filter by recipient).</summary>
     public EmailMessage SingleTo(string recipient) =>
         Assert.Single(_sent, m => string.Equals(m.To, recipient, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>userId and token from the set-password link in the latest email to this address.</summary>
+    public (Guid UserId, string Token) SetPasswordLinkTo(string recipient)
+    {
+        var latest = _sent.Last(m => string.Equals(m.To, recipient, StringComparison.OrdinalIgnoreCase));
+        return ParseSetPasswordLink(latest.TextBody);
+    }
+
+    public static (Guid UserId, string Token) ParseSetPasswordLink(string text)
+    {
+        var match = Regex.Match(text, @"/set-password\?userId=(?<userId>[^&\s]+)&token=(?<token>\S+)");
+        Assert.True(match.Success, "Email does not contain a set-password link.");
+        return (Guid.Parse(match.Groups["userId"].Value), Uri.UnescapeDataString(match.Groups["token"].Value));
+    }
 }
