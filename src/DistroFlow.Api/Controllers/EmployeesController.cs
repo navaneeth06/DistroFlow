@@ -128,6 +128,31 @@ public class EmployeesController : ControllerBase
         };
     }
 
+    /// <summary>The employee left or is suspended: blocks their login. Safe to repeat.</summary>
+    [HttpPost("{id:guid}/deactivate")]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _employeeService.DeactivateAsync(id, cancellationToken);
+
+        return result.Error switch
+        {
+            EmployeeStatusChangeError.None => Ok(
+                ApiResponse<EmployeeResponse>.SuccessResponse(result.Response, "Employee deactivated.")),
+
+            EmployeeStatusChangeError.NotFound => NotFound(
+                ApiResponse<object>.FailureResponse("Employee not found.")),
+
+            EmployeeStatusChangeError.NotEditable => Conflict(
+                ApiResponse<object>.FailureResponse("This employee's personal data was erased; their status cannot change.")),
+
+            EmployeeStatusChangeError.LastAdministrator => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    "This is the last active Administrator. Make someone else an Administrator first.")),
+
+            _ => throw new InvalidOperationException($"Unhandled deactivate error: {result.Error}")
+        };
+    }
+
     /// <summary>Sends a new set-password link to an employee who has not accepted their invite yet.</summary>
     [HttpPost("{id:guid}/resend-invite")]
     public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)

@@ -33,6 +33,14 @@ public interface IEmployeeService
         ChangeEmployeeRolesRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The employee left or is suspended: they can no longer log in and their email becomes
+    /// reusable. Refuses to deactivate the last active Administrator.
+    /// </summary>
+    Task<EmployeeStatusChangeResult> DeactivateAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Emails a fresh set-password link to an employee who has not accepted yet.</summary>
     Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,

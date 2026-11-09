@@ -182,6 +182,47 @@ public class EmployeeService : IEmployeeService
         return ChangeEmployeeRolesResult.Success(MapToResponse(employee, logins));
     }
 
+    public async Task<EmployeeStatusChangeResult> DeactivateAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = _currentTenant.TenantId
+            ?? throw new InvalidOperationException("Deactivating an employee requires an authenticated user.");
+
+        await using var transaction = await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        // Same protection as role changes: concurrent admin-affecting changes in one
+        // distributor run one at a time, so the admin count below is never stale.
+        await _tenantRepository.LockForUpdateAsync(tenantId, cancellationToken);
+
+        var employee = await _employeeRepository.GetByIdAsync(employeeId, cancellationToken);
+        if (employee is null)
+            return EmployeeStatusChangeResult.Failure(EmployeeStatusChangeError.NotFound);
+
+        if (employee.Status == EmployeeStatus.Anonymised || employee.UserId is not { } userId)
+            return EmployeeStatusChangeResult.Failure(EmployeeStatusChangeError.NotEditable);
+
+        var logins = await _identityService.GetLoginInfoAsync([userId], cancellationToken);
+
+        // Already deactivated: nothing to do (repeating the request is safe).
+        if (employee.Status == EmployeeStatus.Deactivated)
+            return EmployeeStatusChangeResult.Success(MapToResponse(employee, logins));
+
+        if (logins[userId].Roles.Contains(EmployeeRoles.Administrator) &&
+            await _identityService.CountActiveAdministratorsAsync(tenantId, cancellationToken) <= 1)
+        {
+            return EmployeeStatusChangeResult.Failure(EmployeeStatusChangeError.LastAdministrator);
+        }
+
+        // Employee status and login are switched off together, in this one transaction.
+        employee.Deactivate(DateTime.UtcNow);
+        await _identityService.SetLoginActiveAsync(userId, isActive: false, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return EmployeeStatusChangeResult.Success(MapToResponse(employee, logins));
+    }
+
     public async Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,
         CancellationToken cancellationToken = default)
