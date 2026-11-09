@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DistroFlow.Domain\DistroFlow.Domain.csproj" />
     <ProjectReference Include="..\..\src\DistroFlow.Infrastructure\DistroFlow.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DistroFlow.Api\DistroFlow.Api.csproj" />
   </ItemGroup>
 
 </Project>

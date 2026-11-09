@@ -1,6 +1,8 @@
 using System.Text;
 using DistroFlow.Application.Common;
+using DistroFlow.Api.Services;
 using DistroFlow.Application.DTOs.Common;
+using DistroFlow.Application.Interfaces.Identity;
 using DistroFlow.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +33,18 @@ public static class ServiceCollectionExtensions
                         ApiResponse<object>.FailureResponse("Validation failed.", errors));
                 };
             });
+
+        return services;
+    }
+
+    /// <summary>Who is calling: the current tenant, read from the request's JWT.</summary>
+    public static IServiceCollection AddCurrentTenant(this IServiceCollection services)
+    {
+        // Makes IHttpContextAccessor injectable, so services can reach the current request.
+        services.AddHttpContextAccessor();
+
+        // Scoped = one per HTTP request, matching the request it reads from.
+        services.AddScoped<ICurrentTenant, HttpCurrentTenant>();
 
         return services;
     }

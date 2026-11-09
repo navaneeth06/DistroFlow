@@ -11,6 +11,7 @@ builder.Services.AddApiControllers();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
+builder.Services.AddCurrentTenant();
 
 var app = builder.Build();
 
