@@ -10,4 +10,11 @@ public interface IEmployeeService
     Task<EmployeeResponse?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds an employee to the current distributor and emails them a set-password link.
+    /// </summary>
+    Task<InviteEmployeeResult> InviteAsync(
+        InviteEmployeeRequest request,
+        CancellationToken cancellationToken = default);
 }

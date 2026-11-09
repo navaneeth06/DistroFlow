@@ -12,6 +12,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddCurrentTenant();
+builder.Services.AddFrontendLinks(builder.Configuration);
 
 var app = builder.Build();
 
