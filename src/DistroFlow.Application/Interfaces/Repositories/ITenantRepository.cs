@@ -14,9 +14,6 @@ public interface ITenantRepository
         Guid id,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<Tenant>> GetAllAsync(
-        CancellationToken cancellationToken = default);
-
     Task SaveChangesAsync(
         CancellationToken cancellationToken = default);
 }
