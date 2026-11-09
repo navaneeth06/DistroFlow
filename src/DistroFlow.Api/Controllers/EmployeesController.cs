@@ -73,6 +73,33 @@ public class EmployeesController : ControllerBase
         };
     }
 
+    /// <summary>Changes an employee's name, phone and employee code.</summary>
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(
+        Guid id,
+        [FromBody] UpdateEmployeeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _employeeService.UpdateAsync(id, request, cancellationToken);
+
+        return result.Error switch
+        {
+            UpdateEmployeeError.None => Ok(
+                ApiResponse<EmployeeResponse>.SuccessResponse(result.Response, "Employee updated successfully.")),
+
+            UpdateEmployeeError.NotFound => NotFound(
+                ApiResponse<object>.FailureResponse("Employee not found.")),
+
+            UpdateEmployeeError.NotEditable => Conflict(
+                ApiResponse<object>.FailureResponse("This employee's personal data was erased and cannot be edited.")),
+
+            UpdateEmployeeError.EmployeeCodeInUse => Conflict(
+                ApiResponse<object>.FailureResponse("Another employee already has this employee code.")),
+
+            _ => throw new InvalidOperationException($"Unhandled update error: {result.Error}")
+        };
+    }
+
     /// <summary>Sends a new set-password link to an employee who has not accepted their invite yet.</summary>
     [HttpPost("{id:guid}/resend-invite")]
     public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)

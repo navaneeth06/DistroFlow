@@ -277,6 +277,110 @@ public class EmployeesControllerTests : IClassFixture<ApiIntegrationTestFactory>
         Assert.Equal(1, _factory.Emails.Sent.Count(m => m.To == email));
     }
 
+    [Fact]
+    public async Task Update_changes_profile_and_omitted_fields_are_cleared()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (employeeId, email) = await InviteAsync(a);
+
+        var response = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{employeeId}",
+            new { fullName = "  Anita R. Rao  ", employeeCode = "EMP-9" }); // no phone: cleared
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        Assert.Equal("Anita R. Rao", data.GetProperty("fullName").GetString()); // trimmed
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("phone").ValueKind);
+        Assert.Equal("EMP-9", data.GetProperty("employeeCode").GetString());
+        Assert.Equal(email, data.GetProperty("email").GetString()); // email unchanged
+        Assert.NotEqual(JsonValueKind.Null, data.GetProperty("updatedAtUtc").ValueKind);
+
+        var reloaded = (await AsAdmin(a).GetFromJsonAsync<JsonElement>($"{EmployeesUrl}/{employeeId}")).GetProperty("data");
+        Assert.Equal("Anita R. Rao", reloaded.GetProperty("fullName").GetString());
+    }
+
+    [Fact]
+    public async Task Update_keeping_the_same_employee_code_is_allowed()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (employeeId, _) = await InviteAsync(a);
+        await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{employeeId}", new { fullName = "Anita Rao", employeeCode = "EMP-5" });
+
+        var response = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{employeeId}", new { fullName = "Anita Rao K", employeeCode = "EMP-5" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_to_an_employee_code_used_by_a_colleague_returns_409()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (first, _) = await InviteAsync(a);
+        var (second, _) = await InviteAsync(a);
+        await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{first}", new { fullName = "First", employeeCode = "EMP-1" });
+
+        var response = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{second}", new { fullName = "Second", employeeCode = "EMP-1" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Same_employee_code_is_allowed_in_different_distributors()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var b = await TestAuth.RegisterAndLoginAsync(_anonymous);
+
+        var inA = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{a.EmployeeId}", new { fullName = "Owner A", employeeCode = "EMP-1" });
+        var inB = await AsAdmin(b).PutAsJsonAsync($"{EmployeesUrl}/{b.EmployeeId}", new { fullName = "Owner B", employeeCode = "EMP-1" });
+
+        Assert.Equal(HttpStatusCode.OK, inA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, inB.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_another_distributors_employee_returns_404_and_changes_nothing()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var b = await TestAuth.RegisterAndLoginAsync(_anonymous);
+
+        var response = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{b.EmployeeId}", new { fullName = "Hijacked" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var ownerOfB = (await AsAdmin(b).GetFromJsonAsync<JsonElement>($"{EmployeesUrl}/{b.EmployeeId}")).GetProperty("data");
+        Assert.Equal("Ravi Sharma", ownerOfB.GetProperty("fullName").GetString());
+    }
+
+    [Fact]
+    public async Task Update_anonymised_employee_returns_409()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (employeeId, _) = await InviteAsync(a);
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var employee = await db.Employees.IgnoreQueryFilters().SingleAsync(e => e.Id == employeeId);
+            employee.Anonymise(DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{employeeId}", new { fullName = "Back Again" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_with_invalid_body_returns_400()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+
+        var response = await AsAdmin(a).PutAsJsonAsync($"{EmployeesUrl}/{a.EmployeeId}",
+            new { fullName = "X", phone = "98765" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var errors = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors");
+        Assert.True(errors.TryGetProperty("FullName", out _));
+        Assert.True(errors.TryGetProperty("Phone", out _));
+    }
+
     private async Task<(Guid EmployeeId, string Email)> InviteAsync(RegisteredDistributor admin)
     {
         var email = UniqueEmail();

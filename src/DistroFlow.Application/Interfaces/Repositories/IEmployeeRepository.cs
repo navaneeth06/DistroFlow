@@ -10,6 +10,13 @@ public interface IEmployeeRepository
     Task<IReadOnlyList<Employee>> ListAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// An employee of the current tenant, tracked for changes (save with IUnitOfWork), or null.
+    /// </summary>
+    Task<Employee?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+
     /// <summary>An employee of the current tenant, or null (also null for another tenant's id).</summary>
     Task<Employee?> GetByIdReadOnlyAsync(
         Guid id,

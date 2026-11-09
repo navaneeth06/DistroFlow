@@ -105,6 +105,40 @@ public class EmployeeService : IEmployeeService
         });
     }
 
+    public async Task<UpdateEmployeeResult> UpdateAsync(
+        Guid employeeId,
+        UpdateEmployeeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        // Tenant filter applies: another distributor's employee is "not found".
+        var employee = await _employeeRepository.GetByIdAsync(employeeId, cancellationToken);
+        if (employee is null)
+            return UpdateEmployeeResult.Failure(UpdateEmployeeError.NotFound);
+
+        // Checked here to return a clear 409; the domain method enforces it regardless.
+        if (employee.Status == EmployeeStatus.Anonymised)
+            return UpdateEmployeeResult.Failure(UpdateEmployeeError.NotEditable);
+
+        employee.UpdateProfile(
+            request.FullName.Trim(),
+            string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            string.IsNullOrWhiteSpace(request.EmployeeCode) ? null : request.EmployeeCode.Trim(),
+            DateTime.UtcNow);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (UniqueConstraintViolationException ex)
+            when (ex.ConstraintName == ConstraintNames.EmployeeCodePerTenant)
+        {
+            return UpdateEmployeeResult.Failure(UpdateEmployeeError.EmployeeCodeInUse);
+        }
+
+        var logins = await LoadLoginsAsync([employee], cancellationToken);
+        return UpdateEmployeeResult.Success(MapToResponse(employee, logins));
+    }
+
     public async Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,
         CancellationToken cancellationToken = default)

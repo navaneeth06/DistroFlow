@@ -18,6 +18,12 @@ public interface IEmployeeService
         InviteEmployeeRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Changes name, phone and employee code of an employee of the current distributor.</summary>
+    Task<UpdateEmployeeResult> UpdateAsync(
+        Guid employeeId,
+        UpdateEmployeeRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Emails a fresh set-password link to an employee who has not accepted yet.</summary>
     Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,
