@@ -34,6 +34,11 @@ public interface IIdentityService
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>False for an invited user who has not set their password yet.</summary>
+    Task<bool> HasPasswordAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Checks email + password against the single active account with that email.
     /// Counts failed attempts and enforces lockout.

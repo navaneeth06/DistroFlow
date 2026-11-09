@@ -52,6 +52,16 @@ public class IdentityService : IIdentityService
         return await _userManager.GeneratePasswordResetTokenAsync(user);
     }
 
+    public async Task<bool> HasPasswordAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        return await _userManager.HasPasswordAsync(user);
+    }
+
     /// <param name="password">Null for an invited user, who sets it later via the emailed link.</param>
     private async Task<CreateUserResult> CreateAsync(
         Guid tenantId,

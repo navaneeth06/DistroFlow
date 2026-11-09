@@ -17,4 +17,9 @@ public interface IEmployeeService
     Task<InviteEmployeeResult> InviteAsync(
         InviteEmployeeRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Emails a fresh set-password link to an employee who has not accepted yet.</summary>
+    Task<ResendInviteResult> ResendInviteAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default);
 }

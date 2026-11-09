@@ -105,6 +105,32 @@ public class EmployeeService : IEmployeeService
         });
     }
 
+    public async Task<ResendInviteResult> ResendInviteAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        // Tenant filter applies: another distributor's employee is "not found".
+        var employee = await _employeeRepository.GetByIdReadOnlyAsync(employeeId, cancellationToken);
+        if (employee is null)
+            return ResendInviteResult.Failure(ResendInviteError.NotFound);
+
+        if (!employee.IsActive || employee.UserId is not { } userId)
+            return ResendInviteResult.Failure(ResendInviteError.NotActive);
+
+        if (await _identityService.HasPasswordAsync(userId, cancellationToken))
+            return ResendInviteResult.Failure(ResendInviteError.AlreadyAccepted);
+
+        var tenant = await _tenantRepository.GetByIdReadOnlyAsync(employee.TenantId, cancellationToken)
+            ?? throw new InvalidOperationException($"Tenant {employee.TenantId} not found.");
+
+        var logins = await _identityService.GetLoginInfoAsync([userId], cancellationToken);
+        var email = logins[userId].Email
+            ?? throw new InvalidOperationException($"Login {userId} has no email.");
+
+        var sent = await TrySendInvitationAsync(employee, userId, email, tenant.Name, cancellationToken);
+        return ResendInviteResult.Success(sent);
+    }
+
     private async Task<bool> TrySendInvitationAsync(
         Employee employee,
         Guid userId,

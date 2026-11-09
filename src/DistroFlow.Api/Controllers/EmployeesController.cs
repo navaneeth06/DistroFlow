@@ -72,4 +72,32 @@ public class EmployeesController : ControllerBase
             _ => throw new InvalidOperationException($"Unhandled invite error: {result.Error}")
         };
     }
+
+    /// <summary>Sends a new set-password link to an employee who has not accepted their invite yet.</summary>
+    [HttpPost("{id:guid}/resend-invite")]
+    public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _employeeService.ResendInviteAsync(id, cancellationToken);
+
+        return result.Error switch
+        {
+            ResendInviteError.None => Ok(
+                ApiResponse<ResendInviteResponse>.SuccessResponse(
+                    result.Response,
+                    result.Response!.InviteEmailSent
+                        ? "Invite email sent."
+                        : "The invite email could not be sent. Please try again later.")),
+
+            ResendInviteError.NotFound => NotFound(
+                ApiResponse<object>.FailureResponse("Employee not found.")),
+
+            ResendInviteError.AlreadyAccepted => Conflict(
+                ApiResponse<object>.FailureResponse("This employee has already set a password.")),
+
+            ResendInviteError.NotActive => Conflict(
+                ApiResponse<object>.FailureResponse("Only active employees can be invited.")),
+
+            _ => throw new InvalidOperationException($"Unhandled resend-invite error: {result.Error}")
+        };
+    }
 }

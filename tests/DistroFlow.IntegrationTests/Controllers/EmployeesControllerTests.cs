@@ -9,6 +9,7 @@ using DistroFlow.Infrastructure.Identity;
 using DistroFlow.Infrastructure.Persistence;
 using DistroFlow.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DistroFlow.IntegrationTests.Controllers;
@@ -224,6 +225,80 @@ public class EmployeesControllerTests : IClassFixture<ApiIntegrationTestFactory>
         var data = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
         Assert.False(data.GetProperty("inviteEmailSent").GetBoolean());
         Assert.Contains(data.GetProperty("employee").GetProperty("id").GetGuid(), await ListIdsAsync(a));
+    }
+
+    [Fact]
+    public async Task Resend_invite_emails_a_new_link_to_a_pending_employee()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (employeeId, email) = await InviteAsync(a);
+
+        var response = await AsAdmin(a).PostAsync($"{EmployeesUrl}/{employeeId}/resend-invite", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        Assert.True(data.GetProperty("inviteEmailSent").GetBoolean());
+        Assert.Equal(2, _factory.Emails.Sent.Count(m => m.To == email)); // original + resent
+    }
+
+    [Fact]
+    public async Task Resend_invite_for_employee_who_already_set_a_password_returns_409()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+
+        // The owner registered with a password, so there is no pending invite.
+        var response = await AsAdmin(a).PostAsync($"{EmployeesUrl}/{a.EmployeeId}/resend-invite", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Resend_invite_for_deactivated_employee_returns_409_and_sends_nothing()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (employeeId, email) = await InviteAsync(a);
+        await DeactivateDirectlyAsync(employeeId);
+
+        var response = await AsAdmin(a).PostAsync($"{EmployeesUrl}/{employeeId}/resend-invite", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(1, _factory.Emails.Sent.Count(m => m.To == email)); // only the original invite
+    }
+
+    [Fact]
+    public async Task Resend_invite_for_another_distributors_employee_returns_404()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var b = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var (employeeOfB, email) = await InviteAsync(b);
+
+        var response = await AsAdmin(a).PostAsync($"{EmployeesUrl}/{employeeOfB}/resend-invite", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(1, _factory.Emails.Sent.Count(m => m.To == email));
+    }
+
+    private async Task<(Guid EmployeeId, string Email)> InviteAsync(RegisteredDistributor admin)
+    {
+        var email = UniqueEmail();
+        var response = await AsAdmin(admin).PostAsJsonAsync(EmployeesUrl, InviteBody(email, "Anita Rao", [EmployeeRoles.SalesStaff]));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        return (data.GetProperty("employee").GetProperty("id").GetGuid(), email);
+    }
+
+    /// <summary>Test setup until the deactivate endpoint exists.</summary>
+    private async Task DeactivateDirectlyAsync(Guid employeeId)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var employee = await db.Employees.IgnoreQueryFilters().SingleAsync(e => e.Id == employeeId);
+        var user = await db.Users.SingleAsync(u => u.Id == employee.UserId);
+        employee.Deactivate(DateTime.UtcNow);
+        user.IsActive = false;
+        await db.SaveChangesAsync();
     }
 
     private static string UniqueEmail() => $"invitee-{Guid.NewGuid():N}@example.com";
