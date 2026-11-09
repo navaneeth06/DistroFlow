@@ -51,7 +51,7 @@ public class AuthService : IAuthService
             return LoginResult.Failure(LoginError.TenantSuspended);
         }
 
-        var employee = await _employeeRepository.GetByUserIdReadOnlyAsync(credentials.UserId, cancellationToken);
+        var employee = await _employeeRepository.GetForLoginByUserIdAsync(credentials.UserId, cancellationToken);
         if (employee is null || !employee.IsActive)
         {
             // Login and employee status are updated together, so this is a safety net.

@@ -19,11 +19,15 @@ public class EmployeeRepository : IEmployeeRepository
         _dbContext.Employees.Add(employee);
     }
 
-    public async Task<Employee?> GetByUserIdReadOnlyAsync(
+    public async Task<Employee?> GetForLoginByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
         return await _dbContext.Employees
+            // At login nobody is authenticated yet, so there is no current tenant and the
+            // tenant filter would hide every row. Safe here: the user id comes from a
+            // successful password check, and the result is never returned to the caller.
+            .IgnoreQueryFilters()
             .AsNoTracking()
             .SingleOrDefaultAsync(e => e.UserId == userId, cancellationToken);
     }

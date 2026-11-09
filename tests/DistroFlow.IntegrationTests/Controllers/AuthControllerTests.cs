@@ -55,7 +55,8 @@ public class AuthControllerTests : IClassFixture<ApiIntegrationTestFactory>
         Assert.True(await userManager.CheckPasswordAsync(user, ValidPassword));
         Assert.True(await userManager.IsInRoleAsync(user, EmployeeRoles.Administrator));
 
-        var employee = await db.Employees.AsNoTracking().SingleAsync(e => e.Id == employeeId);
+        // Verifying the database directly, outside any request (no tenant): bypass the tenant filter.
+        var employee = await db.Employees.IgnoreQueryFilters().AsNoTracking().SingleAsync(e => e.Id == employeeId);
         Assert.Equal(tenantId, employee.TenantId);
         Assert.Equal(userId, employee.UserId);
         Assert.Equal("Ravi Sharma", employee.FullName);

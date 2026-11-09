@@ -178,7 +178,8 @@ public class AuthLoginTests : IClassFixture<ApiIntegrationTestFactory>
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var user = await db.Users.SingleAsync(u => u.Id == owner.UserId);
-        var employee = await db.Employees.SingleAsync(e => e.Id == owner.EmployeeId);
+        // Test setup runs outside any request (no tenant), so bypass the tenant filter.
+        var employee = await db.Employees.IgnoreQueryFilters().SingleAsync(e => e.Id == owner.EmployeeId);
         user.IsActive = false;
         employee.Deactivate(DateTime.UtcNow);
         await db.SaveChangesAsync();
