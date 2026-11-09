@@ -82,6 +82,43 @@ public class EmployeeTests
     }
 
     [Fact]
+    public void UpdateProfile_changes_details_and_records_time()
+    {
+        var employee = CreateEmployee();
+
+        employee.UpdateProfile("Ravi K. Kumar", null, "EMP-002", Now);
+
+        Assert.Equal("Ravi K. Kumar", employee.FullName);
+        Assert.Null(employee.Phone);
+        Assert.Equal("EMP-002", employee.EmployeeCode);
+        Assert.Equal(Now, employee.UpdatedAtUtc);
+    }
+
+    [Fact]
+    public void Deactivated_employee_can_still_be_edited()
+    {
+        var employee = CreateEmployee();
+        employee.Deactivate(Now);
+
+        employee.UpdateProfile("Ravi Kumar", "+919000000000", "EMP-001", Now.AddDays(1));
+
+        Assert.Equal("+919000000000", employee.Phone);
+    }
+
+    [Fact]
+    public void Anonymised_employee_cannot_be_edited()
+    {
+        var employee = CreateEmployee();
+        employee.Anonymise(Now);
+
+        Assert.Throws<InvalidOperationException>(
+            () => employee.UpdateProfile("Ravi Kumar", "+919876543210", "EMP-001", Now));
+
+        Assert.Equal(Employee.AnonymisedName, employee.FullName);
+        Assert.Null(employee.Phone);
+    }
+
+    [Fact]
     public void Anonymised_employee_cannot_be_reactivated()
     {
         var employee = CreateEmployee();
