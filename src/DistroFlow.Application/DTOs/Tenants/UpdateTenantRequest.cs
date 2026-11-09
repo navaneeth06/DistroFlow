@@ -33,5 +33,6 @@ public class UpdateTenantRequest
     [ValidTimeZone]
     public string TimeZoneId { get; set; } = "Asia/Kolkata";
 
-    public bool IsActive { get; set; }
+    // No IsActive: suspending/reactivating a distributor is a platform decision,
+    // not something a distributor's own administrator may change.
 }

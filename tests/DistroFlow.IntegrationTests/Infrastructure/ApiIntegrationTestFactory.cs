@@ -35,8 +35,13 @@ public class ApiIntegrationTestFactory
         await dbContext.Database.MigrateAsync();
     }
 
+    /// <summary>Test-only key; real keys come from user-secrets or environment variables.</summary>
+    public const string JwtSigningKey = "integration-tests-signing-key-not-a-real-secret-0123456789";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
 {
+    builder.UseSetting("Jwt:SigningKey", JwtSigningKey);
+
     builder.ConfigureServices(services =>
     {
         services.RemoveAll<DbContextOptions<AppDbContext>>();

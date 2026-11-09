@@ -1,52 +1,21 @@
-using DistroFlow.Application.DTOs.Common;
-using Microsoft.AspNetCore.Mvc;
+using DistroFlow.Api.Extensions;
+using DistroFlow.Application;
+using DistroFlow.Infrastructure;
 using DistroFlow.Infrastructure.Persistence;
-using DistroFlow.Application.Services;
-using DistroFlow.Application.Interfaces.Repositories;
-using DistroFlow.Application.Interfaces.Services;
-using DistroFlow.Infrastructure.Repositories;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ---- Services (what the app is made of) ----
 builder.Services.AddOpenApi();
-builder.Services
-    .AddControllers()
-    .ConfigureApiBehaviorOptions(options =>
-    {
-        options.InvalidModelStateResponseFactory = context =>
-        {
-            var errors = context.ModelState
-                .Where(x => x.Value?.Errors.Count > 0)
-                .ToDictionary(
-                    x => x.Key,
-                    x => x.Value!.Errors
-                        .Select(e => e.ErrorMessage)
-                        .ToArray()
-                );
-
-            var response = ApiResponse<object>.FailureResponse(
-                "Validation failed.",
-                errors
-            );
-
-            return new BadRequestObjectResult(response);
-        };
-    });
-
-var connectionString = builder.Configuration
-    .GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException(
-        "Database connection string 'DefaultConnection' is missing.");
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
-builder.Services.AddScoped<ITenantRepository, TenantRepository>();
-builder.Services.AddScoped<ITenantService, TenantService>();
+builder.Services.AddApiControllers();
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddJwtAuthentication();
+builder.Services.AddCurrentTenant();
 
 var app = builder.Build();
 
+// ---- Request pipeline (what happens to each request, in order) ----
 app.MapGet("/health/database", async (AppDbContext db) =>
 {
     var canConnect = await db.Database.CanConnectAsync();
@@ -58,16 +27,22 @@ app.MapGet("/health/database", async (AppDbContext db) =>
             database = "distroflow_dev"
         })
         : Results.Problem("Unable to connect to PostgreSQL.");
-});
+})
+.AllowAnonymous(); // probed by Docker/monitoring, which have no token
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 }
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
+
+// Lets the integration tests reference Program in WebApplicationFactory<Program>.
 public partial class Program { }

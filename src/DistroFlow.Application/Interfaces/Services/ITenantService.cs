@@ -2,25 +2,16 @@ using DistroFlow.Application.DTOs.Tenants;
 
 namespace DistroFlow.Application.Interfaces.Services;
 
+/// <summary>
+/// The caller's own distributor. The tenant always comes from <see cref="Identity.ICurrentTenant"/>
+/// (the JWT), never from a route or body, so one distributor can never address another.
+/// </summary>
 public interface ITenantService
 {
-    Task<TenantResponse> CreateAsync(
-        CreateTenantRequest request,
+    Task<TenantResponse?> GetCurrentAsync(
         CancellationToken cancellationToken = default);
 
-    Task<TenantResponse?> GetByIdAsync(
-        Guid id,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<TenantResponse>> GetAllAsync(
-        CancellationToken cancellationToken = default);
-
-    Task<TenantResponse?> UpdateAsync(
-        Guid id,
+    Task<TenantResponse?> UpdateCurrentAsync(
         UpdateTenantRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> DeactivateAsync(
-        Guid id,
         CancellationToken cancellationToken = default);
 }
