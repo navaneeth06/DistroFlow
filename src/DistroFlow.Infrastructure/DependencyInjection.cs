@@ -1,4 +1,6 @@
+using DistroFlow.Application.Interfaces.Email;
 using DistroFlow.Application.Interfaces.Identity;
+using DistroFlow.Infrastructure.Email;
 using DistroFlow.Application.Interfaces.Persistence;
 using DistroFlow.Application.Interfaces.Repositories;
 using DistroFlow.Infrastructure.Identity;
@@ -23,8 +25,19 @@ public static class DependencyInjection
         services.AddPersistence(configuration);
         services.AddIdentityServices();
         services.AddTokenIssuing(configuration);
+        services.AddEmail(configuration);
 
         return services;
+    }
+
+    private static void AddEmail(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<SmtpOptions>()
+            .Bind(configuration.GetSection(SmtpOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
     }
 
     private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
