@@ -18,6 +18,23 @@ public interface IIdentityService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a login with no password (an invited employee sets it via an emailed link)
+    /// and assigns the roles. Saves immediately; wrap in a transaction with the employee row.
+    /// </summary>
+    Task<CreateUserResult> CreateInvitedUserAsync(
+        Guid tenantId,
+        string email,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// A signed, single-use, expiring token that lets the user set their password.
+    /// </summary>
+    Task<string> GeneratePasswordSetupTokenAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Checks email + password against the single active account with that email.
     /// Counts failed attempts and enforces lockout.
     /// </summary>

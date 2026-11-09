@@ -25,12 +25,39 @@ public class IdentityService : IIdentityService
         _logger = logger;
     }
 
-    public async Task<CreateUserResult> CreateUserAsync(
+    public Task<CreateUserResult> CreateUserAsync(
         Guid tenantId,
         string email,
         string password,
         string role,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(tenantId, email, password, [role]);
+
+    public Task<CreateUserResult> CreateInvitedUserAsync(
+        Guid tenantId,
+        string email,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(tenantId, email, password: null, roles);
+
+    public async Task<string> GeneratePasswordSetupTokenAsync(
+        Guid userId,
         CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        // Identity's password-reset token: signed with Data Protection, tied to the user's
+        // security stamp (so it stops working once the password is set) and time-limited.
+        return await _userManager.GeneratePasswordResetTokenAsync(user);
+    }
+
+    /// <param name="password">Null for an invited user, who sets it later via the emailed link.</param>
+    private async Task<CreateUserResult> CreateAsync(
+        Guid tenantId,
+        string email,
+        string? password,
+        IReadOnlyCollection<string> roles)
     {
         var user = new ApplicationUser
         {
@@ -45,7 +72,9 @@ public class IdentityService : IIdentityService
         IdentityResult created;
         try
         {
-            created = await _userManager.CreateAsync(user, password);
+            created = password is null
+                ? await _userManager.CreateAsync(user)
+                : await _userManager.CreateAsync(user, password);
         }
         catch (DbUpdateException ex) when (IsActiveEmailViolation(ex))
         {
@@ -72,12 +101,13 @@ public class IdentityService : IIdentityService
                 created.Errors.Select(e => e.Description).ToList());
         }
 
-        var assigned = await _userManager.AddToRoleAsync(user, role);
+        var assigned = await _userManager.AddToRolesAsync(user, roles);
         if (!assigned.Succeeded)
         {
-            // Roles are seeded by migration; a missing role is a bug, not user error.
+            // Roles are validated at the API boundary and seeded by migration;
+            // failing here is a bug, not user error.
             throw new InvalidOperationException(
-                $"Could not assign role '{role}': {string.Join("; ", assigned.Errors.Select(e => e.Description))}");
+                $"Could not assign roles '{string.Join(", ", roles)}': {string.Join("; ", assigned.Errors.Select(e => e.Description))}");
         }
 
         return CreateUserResult.Success(user.Id);

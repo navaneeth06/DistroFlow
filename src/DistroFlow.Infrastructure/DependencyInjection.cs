@@ -72,7 +72,13 @@ public static class DependencyInjection
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })
             .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<AppDbContext>();
+            .AddEntityFrameworkStores<AppDbContext>()
+            // Signed, single-use tokens for invite / set-password links.
+            .AddDefaultTokenProviders();
+
+        // Invite links stay valid for 3 days.
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+            options.TokenLifespan = TimeSpan.FromDays(3));
 
         services.AddScoped<IIdentityService, IdentityService>();
     }

@@ -91,6 +91,48 @@ public class IdentityServiceTests : IClassFixture<ApiIntegrationTestFactory>
         Assert.Equal(0, await db.Users.CountAsync(u => u.TenantId == tenant.Id));
     }
 
+    [Fact]
+    public async Task CreateInvitedUser_creates_login_without_password_and_with_all_roles()
+    {
+        var tenant = await CreateTenantAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var result = await service.CreateInvitedUserAsync(
+            tenant.Id, UniqueEmail(), [EmployeeRoles.SalesStaff, EmployeeRoles.Approver]);
+
+        Assert.True(result.Succeeded);
+        var user = await userManager.FindByIdAsync(result.UserId!.Value.ToString());
+        Assert.NotNull(user);
+        Assert.False(await userManager.HasPasswordAsync(user));
+        Assert.Equal(
+            [EmployeeRoles.Approver, EmployeeRoles.SalesStaff],
+            (await userManager.GetRolesAsync(user)).Order());
+    }
+
+    [Fact]
+    public async Task Password_setup_token_is_accepted_once_and_then_stops_working()
+    {
+        var tenant = await CreateTenantAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var created = await service.CreateInvitedUserAsync(tenant.Id, UniqueEmail(), [EmployeeRoles.SalesStaff]);
+        var token = await service.GeneratePasswordSetupTokenAsync(created.UserId!.Value);
+        var user = (await userManager.FindByIdAsync(created.UserId.Value.ToString()))!;
+
+        var first = await userManager.ResetPasswordAsync(user, token, ValidPassword);
+        var reused = await userManager.ResetPasswordAsync(user, token, "An0ther!Passw0rd");
+
+        Assert.True(first.Succeeded);
+        Assert.False(reused.Succeeded); // single use: setting the password invalidates the token
+        Assert.True(await userManager.CheckPasswordAsync(user, ValidPassword));
+    }
+
     private static string UniqueEmail() => $"user-{Guid.NewGuid():N}@example.com";
 
     private async Task<Tenant> CreateTenantAsync()
