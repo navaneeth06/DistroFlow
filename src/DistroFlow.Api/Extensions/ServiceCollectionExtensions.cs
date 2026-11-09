@@ -5,6 +5,7 @@ using DistroFlow.Application.DTOs.Common;
 using DistroFlow.Application.Interfaces.Identity;
 using DistroFlow.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -87,7 +88,13 @@ public static class ServiceCollectionExtensions
                 };
             });
 
-        services.AddAuthorization();
+        // Secure by default: every endpoint requires an authenticated user unless it
+        // explicitly opts out with [AllowAnonymous] / .AllowAnonymous().
+        // Forgetting [Authorize] on a new endpoint therefore cannot expose it.
+        services.AddAuthorizationBuilder()
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build());
 
         return services;
     }

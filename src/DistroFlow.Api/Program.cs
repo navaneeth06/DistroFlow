@@ -27,11 +27,12 @@ app.MapGet("/health/database", async (AppDbContext db) =>
             database = "distroflow_dev"
         })
         : Results.Problem("Unable to connect to PostgreSQL.");
-});
+})
+.AllowAnonymous(); // probed by Docker/monitoring, which have no token
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
 }
 
 app.UseHttpsRedirection();
