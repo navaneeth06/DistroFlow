@@ -52,6 +52,48 @@ public class IdentityService : IIdentityService
         return await _userManager.GeneratePasswordResetTokenAsync(user);
     }
 
+    public async Task<SetPasswordResult> SetInitialPasswordAsync(
+        Guid userId,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+
+        // Same answer for every "this link can't be used" case.
+        if (user is null || !user.IsActive || await _userManager.HasPasswordAsync(user))
+        {
+            return SetPasswordResult.Failure(SetPasswordError.InvalidLink);
+        }
+
+        // Verifies the token (signature, expiry, security stamp) and then the password policy.
+        // On success the security stamp changes, so this token, and any other outstanding
+        // invite link for this user, stops working.
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+
+        if (!result.Succeeded)
+        {
+            var invalidToken = result.Errors.Any(e => e.Code == _userManager.ErrorDescriber.InvalidToken().Code);
+
+            return invalidToken
+                ? SetPasswordResult.Failure(SetPasswordError.InvalidLink)
+                : SetPasswordResult.Failure(
+                    SetPasswordError.PasswordRejected,
+                    result.Errors.Select(e => e.Description).ToList());
+        }
+
+        // Using the emailed link proves the employee controls this inbox.
+        user.EmailConfirmed = true;
+        var updated = await _userManager.UpdateAsync(user);
+        if (!updated.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Could not confirm email for user {user.Id}: {string.Join("; ", updated.Errors.Select(e => e.Description))}");
+        }
+
+        return SetPasswordResult.Success();
+    }
+
     public async Task<bool> HasPasswordAsync(
         Guid userId,
         CancellationToken cancellationToken = default)

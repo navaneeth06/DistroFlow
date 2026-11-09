@@ -34,6 +34,16 @@ public interface IIdentityService
         Guid userId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// An invited user sets their first password using the token from their invite email.
+    /// Never works for an account that already has a password (this is not a password reset).
+    /// </summary>
+    Task<SetPasswordResult> SetInitialPasswordAsync(
+        Guid userId,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default);
+
     /// <summary>False for an invited user who has not set their password yet.</summary>
     Task<bool> HasPasswordAsync(
         Guid userId,

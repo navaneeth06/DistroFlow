@@ -50,6 +50,36 @@ public class AuthController : ControllerBase
         };
     }
 
+    /// <summary>An invited employee sets their first password using the link from their invite email.</summary>
+    [AllowAnonymous]
+    [HttpPost("set-password")]
+    public async Task<IActionResult> SetPassword(
+        [FromBody] SetPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.SetPasswordAsync(request, cancellationToken);
+
+        return result.Error switch
+        {
+            SetPasswordError.None => Ok(
+                ApiResponse<object>.SuccessResponse(null, "Password set. You can now log in.")),
+
+            SetPasswordError.InvalidLink => BadRequest(
+                ApiResponse<object>.FailureResponse(
+                    "This link is invalid or has expired. Ask your administrator to resend the invite.")),
+
+            SetPasswordError.PasswordRejected => BadRequest(
+                ApiResponse<object>.FailureResponse(
+                    "Validation failed.",
+                    new Dictionary<string, string[]>
+                    {
+                        [nameof(SetPasswordRequest.NewPassword)] = result.Messages.ToArray()
+                    })),
+
+            _ => throw new InvalidOperationException($"Unhandled set-password error: {result.Error}")
+        };
+    }
+
     /// <summary>Exchanges email + password for a JWT access token.</summary>
     [AllowAnonymous]
     [HttpPost("login")]

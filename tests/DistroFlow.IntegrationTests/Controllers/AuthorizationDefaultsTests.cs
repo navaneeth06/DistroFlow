@@ -43,7 +43,8 @@ public class AuthorizationDefaultsTests : IClassFixture<ApiIntegrationTestFactor
             "GET health/database",
             "GET openapi/{documentName}.json",
             "POST api/v1/auth/login",
-            "POST api/v1/auth/register"
+            "POST api/v1/auth/register",
+            "POST api/v1/auth/set-password" // invited employee is not logged in yet; protected by the signed token
         ];
 
         var endpoints = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints;
