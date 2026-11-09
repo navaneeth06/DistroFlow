@@ -100,6 +100,34 @@ public class EmployeesController : ControllerBase
         };
     }
 
+    /// <summary>Replaces an employee's roles. The last active Administrator cannot be demoted.</summary>
+    [HttpPut("{id:guid}/roles")]
+    public async Task<IActionResult> ChangeRoles(
+        Guid id,
+        [FromBody] ChangeEmployeeRolesRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _employeeService.ChangeRolesAsync(id, request, cancellationToken);
+
+        return result.Error switch
+        {
+            ChangeEmployeeRolesError.None => Ok(
+                ApiResponse<EmployeeResponse>.SuccessResponse(result.Response, "Roles updated successfully.")),
+
+            ChangeEmployeeRolesError.NotFound => NotFound(
+                ApiResponse<object>.FailureResponse("Employee not found.")),
+
+            ChangeEmployeeRolesError.NotEditable => Conflict(
+                ApiResponse<object>.FailureResponse("This employee has no login, so roles cannot be changed.")),
+
+            ChangeEmployeeRolesError.LastAdministrator => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    "This is the last active Administrator. Make someone else an Administrator first.")),
+
+            _ => throw new InvalidOperationException($"Unhandled change-roles error: {result.Error}")
+        };
+    }
+
     /// <summary>Sends a new set-password link to an employee who has not accepted their invite yet.</summary>
     [HttpPost("{id:guid}/resend-invite")]
     public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)

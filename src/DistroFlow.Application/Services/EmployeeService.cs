@@ -6,6 +6,7 @@ using DistroFlow.Application.Interfaces.Identity;
 using DistroFlow.Application.Interfaces.Persistence;
 using DistroFlow.Application.Interfaces.Repositories;
 using DistroFlow.Application.Interfaces.Services;
+using DistroFlow.Domain.Constants;
 using DistroFlow.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -137,6 +138,48 @@ public class EmployeeService : IEmployeeService
 
         var logins = await LoadLoginsAsync([employee], cancellationToken);
         return UpdateEmployeeResult.Success(MapToResponse(employee, logins));
+    }
+
+    public async Task<ChangeEmployeeRolesResult> ChangeRolesAsync(
+        Guid employeeId,
+        ChangeEmployeeRolesRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = _currentTenant.TenantId
+            ?? throw new InvalidOperationException("Changing roles requires an authenticated user.");
+
+        await using var transaction = await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        // 1. Lock this distributor's row. A concurrent role change in the same distributor
+        //    waits here until we commit, so the admin count below cannot be stale.
+        await _tenantRepository.LockForUpdateAsync(tenantId, cancellationToken);
+
+        // 2. Load the employee (tenant filter: another distributor's employee is "not found").
+        var employee = await _employeeRepository.GetByIdReadOnlyAsync(employeeId, cancellationToken);
+        if (employee is null)
+            return ChangeEmployeeRolesResult.Failure(ChangeEmployeeRolesError.NotFound);
+
+        if (employee.UserId is not { } userId)
+            return ChangeEmployeeRolesResult.Failure(ChangeEmployeeRolesError.NotEditable);
+
+        // 3. Check the rule: never remove the last active Administrator.
+        var currentRoles = (await _identityService.GetLoginInfoAsync([userId], cancellationToken))[userId].Roles;
+        var removesAdministrator =
+            currentRoles.Contains(EmployeeRoles.Administrator) &&
+            !request.Roles.Contains(EmployeeRoles.Administrator);
+
+        if (removesAdministrator && employee.IsActive &&
+            await _identityService.CountActiveAdministratorsAsync(tenantId, cancellationToken) <= 1)
+        {
+            return ChangeEmployeeRolesResult.Failure(ChangeEmployeeRolesError.LastAdministrator);
+        }
+
+        // 4. Apply and commit (which also releases the lock).
+        await _identityService.ReplaceRolesAsync(userId, request.Roles, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var logins = await _identityService.GetLoginInfoAsync([userId], cancellationToken);
+        return ChangeEmployeeRolesResult.Success(MapToResponse(employee, logins));
     }
 
     public async Task<ResendInviteResult> ResendInviteAsync(

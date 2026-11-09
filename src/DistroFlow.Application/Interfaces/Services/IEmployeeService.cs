@@ -24,6 +24,15 @@ public interface IEmployeeService
         UpdateEmployeeRequest request,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Replaces an employee's roles. Refuses to leave the distributor without an active
+    /// Administrator, also when two such changes run at the same time.
+    /// </summary>
+    Task<ChangeEmployeeRolesResult> ChangeRolesAsync(
+        Guid employeeId,
+        ChangeEmployeeRolesRequest request,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Emails a fresh set-password link to an employee who has not accepted yet.</summary>
     Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,
