@@ -118,6 +118,44 @@ public class IdentityService : IIdentityService
         }
     }
 
+    public async Task<SetLoginActiveResult> SetLoginActiveAsync(
+        Guid userId,
+        bool isActive,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        if (user.IsActive == isActive)
+        {
+            return SetLoginActiveResult.Succeeded;
+        }
+
+        user.IsActive = isActive;
+
+        if (!isActive)
+        {
+            // A new security stamp invalidates outstanding invite / set-password links.
+            await _userManager.UpdateSecurityStampAsync(user);
+        }
+
+        try
+        {
+            EnsureSucceeded(await _userManager.UpdateAsync(user), "update", userId);
+        }
+        catch (DbUpdateException ex) when (IsActiveEmailViolation(ex))
+        {
+            // Activating would give the email two active accounts; the database refuses.
+            _logger.LogWarning(
+                "Login {UserId} not reactivated: email already active on another account", userId);
+
+            _dbContext.Entry(user).State = EntityState.Detached;
+            return SetLoginActiveResult.EmailInUse;
+        }
+
+        return SetLoginActiveResult.Succeeded;
+    }
+
     public async Task<int> CountActiveAdministratorsAsync(
         Guid tenantId,
         CancellationToken cancellationToken = default)

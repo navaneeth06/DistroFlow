@@ -50,6 +50,16 @@ public interface IIdentityService
         IReadOnlyCollection<string> roles,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Turns a login on or off. An inactive login cannot sign in and frees its email for reuse.
+    /// Deactivating also invalidates any outstanding invite links.
+    /// Saves immediately; wrap in a transaction with the employee change.
+    /// </summary>
+    Task<SetLoginActiveResult> SetLoginActiveAsync(
+        Guid userId,
+        bool isActive,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Number of active logins in the tenant that have the Administrator role.</summary>
     Task<int> CountActiveAdministratorsAsync(
         Guid tenantId,

@@ -173,6 +173,74 @@ public class IdentityServiceTests : IClassFixture<ApiIntegrationTestFactory>
         Assert.Equal(1, await service.CountActiveAdministratorsAsync(tenant.Id));
     }
 
+    [Fact]
+    public async Task Deactivating_a_login_also_invalidates_its_invite_link()
+    {
+        var tenant = await CreateTenantAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var created = await service.CreateInvitedUserAsync(tenant.Id, UniqueEmail(), [EmployeeRoles.SalesStaff]);
+        var token = await service.GeneratePasswordSetupTokenAsync(created.UserId!.Value);
+
+        var result = await service.SetLoginActiveAsync(created.UserId.Value, isActive: false);
+
+        Assert.Equal(SetLoginActiveResult.Succeeded, result);
+        var user = (await userManager.FindByIdAsync(created.UserId.Value.ToString()))!;
+        Assert.False(user.IsActive);
+        Assert.False(await userManager.VerifyUserTokenAsync(
+            user,
+            userManager.Options.Tokens.PasswordResetTokenProvider,
+            UserManager<ApplicationUser>.ResetPasswordTokenPurpose,
+            token));
+    }
+
+    [Fact]
+    public async Task Reactivating_a_login_succeeds_when_the_email_is_free()
+    {
+        var tenant = await CreateTenantAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var created = await service.CreateInvitedUserAsync(tenant.Id, UniqueEmail(), [EmployeeRoles.SalesStaff]);
+        await service.SetLoginActiveAsync(created.UserId!.Value, isActive: false);
+
+        var result = await service.SetLoginActiveAsync(created.UserId.Value, isActive: true);
+
+        Assert.Equal(SetLoginActiveResult.Succeeded, result);
+        Assert.True((await db.Users.AsNoTracking().SingleAsync(u => u.Id == created.UserId)).IsActive);
+    }
+
+    [Fact]
+    public async Task Reactivating_a_login_whose_email_is_active_elsewhere_returns_EmailInUse()
+    {
+        var oldEmployer = await CreateTenantAsync();
+        var newEmployer = await CreateTenantAsync();
+        var email = UniqueEmail();
+
+        Guid oldLogin;
+        await using (var setup = _factory.Services.CreateAsyncScope())
+        {
+            var setupService = setup.ServiceProvider.GetRequiredService<IIdentityService>();
+            oldLogin = (await setupService.CreateInvitedUserAsync(oldEmployer.Id, email, [EmployeeRoles.SalesStaff])).UserId!.Value;
+            await setupService.SetLoginActiveAsync(oldLogin, isActive: false);   // left the old job
+            Assert.True((await setupService.CreateInvitedUserAsync(newEmployer.Id, email, [EmployeeRoles.SalesStaff])).Succeeded);
+        }
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var result = await service.SetLoginActiveAsync(oldLogin, isActive: true);
+
+        Assert.Equal(SetLoginActiveResult.EmailInUse, result);
+        Assert.False((await db.Users.AsNoTracking().SingleAsync(u => u.Id == oldLogin)).IsActive);
+    }
+
     private static string UniqueEmail() => $"user-{Guid.NewGuid():N}@example.com";
 
     private async Task<Tenant> CreateTenantAsync()
