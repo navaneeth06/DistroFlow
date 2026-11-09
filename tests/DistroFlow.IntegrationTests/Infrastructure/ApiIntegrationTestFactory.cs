@@ -1,4 +1,4 @@
-
+using DistroFlow.Application.Interfaces.Email;
 using DistroFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -49,8 +49,15 @@ public class ApiIntegrationTestFactory
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(_postgres.GetConnectionString()));
+
+        // Record emails in memory instead of sending them over SMTP.
+        services.RemoveAll<IEmailSender>();
+        services.AddSingleton<IEmailSender>(Emails);
     });
 }
+
+    /// <summary>Emails "sent" by the API during tests.</summary>
+    public FakeEmailSender Emails { get; } = new();
 
     public new async Task DisposeAsync()
     {

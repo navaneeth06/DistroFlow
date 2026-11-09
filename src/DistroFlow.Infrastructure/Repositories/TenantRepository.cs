@@ -41,6 +41,22 @@ public class TenantRepository : ITenantRepository
                 cancellationToken);
     }
 
+    public async Task LockForUpdateAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        // Without a transaction the lock would be released as soon as the statement ends.
+        if (_dbContext.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("LockForUpdateAsync must be called inside a transaction.");
+        }
+
+        // Interpolated values become SQL parameters (no SQL injection).
+        await _dbContext.Database.ExecuteSqlAsync(
+            $"""SELECT 1 FROM "Tenants" WHERE "Id" = {tenantId} FOR UPDATE""",
+            cancellationToken);
+    }
+
     public async Task SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {

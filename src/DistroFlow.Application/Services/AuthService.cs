@@ -30,6 +30,12 @@ public class AuthService : IAuthService
         _unitOfWork = unitOfWork;
     }
 
+    public Task<SetPasswordResult> SetPasswordAsync(
+        SetPasswordRequest request,
+        CancellationToken cancellationToken = default) =>
+        _identityService.SetInitialPasswordAsync(
+            request.UserId!.Value, request.Token, request.NewPassword, cancellationToken);
+
     public async Task<LoginResult> LoginAsync(
         LoginRequest request,
         CancellationToken cancellationToken = default)

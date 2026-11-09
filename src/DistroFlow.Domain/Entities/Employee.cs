@@ -59,6 +59,23 @@ public class Employee
         UpdatedAtUtc = utcNow;
     }
 
+    /// <summary>
+    /// Changes the profile details. Not allowed once anonymised: that data was erased on
+    /// purpose and must not be re-entered.
+    /// </summary>
+    public void UpdateProfile(string fullName, string? phone, string? employeeCode, DateTime utcNow)
+    {
+        if (Status == EmployeeStatus.Anonymised)
+        {
+            throw new InvalidOperationException("An anonymised employee cannot be edited.");
+        }
+
+        FullName = fullName;
+        Phone = phone;
+        EmployeeCode = employeeCode;
+        UpdatedAtUtc = utcNow;
+    }
+
     public void Reactivate(DateTime utcNow)
     {
         if (Status == EmployeeStatus.Anonymised)

@@ -19,6 +19,32 @@ public class EmployeeRepository : IEmployeeRepository
         _dbContext.Employees.Add(employee);
     }
 
+    public async Task<IReadOnlyList<Employee>> ListAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Employees
+            .AsNoTracking()
+            .OrderBy(e => e.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Employee?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Employees
+            .SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
+    }
+
+    public async Task<Employee?> GetByIdReadOnlyAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Employees
+            .AsNoTracking()
+            .SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
+    }
+
     public async Task<Employee?> GetForLoginByUserIdAsync(
         Guid userId,
         CancellationToken cancellationToken = default)

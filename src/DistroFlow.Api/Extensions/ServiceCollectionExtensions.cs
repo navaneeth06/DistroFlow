@@ -38,6 +38,17 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>Frontend base URL, used to build links in emails. Validated at startup.</summary>
+    public static IServiceCollection AddFrontendLinks(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<FrontendOptions>()
+            .Bind(configuration.GetSection(FrontendOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        return services;
+    }
+
     /// <summary>Who is calling: the current tenant, read from the request's JWT.</summary>
     public static IServiceCollection AddCurrentTenant(this IServiceCollection services)
     {

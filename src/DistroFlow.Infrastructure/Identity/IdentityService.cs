@@ -1,4 +1,5 @@
 using DistroFlow.Application.Interfaces.Identity;
+using DistroFlow.Domain.Constants;
 using DistroFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -25,12 +26,180 @@ public class IdentityService : IIdentityService
         _logger = logger;
     }
 
-    public async Task<CreateUserResult> CreateUserAsync(
+    public Task<CreateUserResult> CreateUserAsync(
         Guid tenantId,
         string email,
         string password,
         string role,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(tenantId, email, password, [role]);
+
+    public Task<CreateUserResult> CreateInvitedUserAsync(
+        Guid tenantId,
+        string email,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken = default) =>
+        CreateAsync(tenantId, email, password: null, roles);
+
+    public async Task<string> GeneratePasswordSetupTokenAsync(
+        Guid userId,
         CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        // Identity's password-reset token: signed with Data Protection, tied to the user's
+        // security stamp (so it stops working once the password is set) and time-limited.
+        return await _userManager.GeneratePasswordResetTokenAsync(user);
+    }
+
+    public async Task<SetPasswordResult> SetInitialPasswordAsync(
+        Guid userId,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+
+        // Same answer for every "this link can't be used" case.
+        if (user is null || !user.IsActive || await _userManager.HasPasswordAsync(user))
+        {
+            return SetPasswordResult.Failure(SetPasswordError.InvalidLink);
+        }
+
+        // Verifies the token (signature, expiry, security stamp) and then the password policy.
+        // On success the security stamp changes, so this token, and any other outstanding
+        // invite link for this user, stops working.
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+
+        if (!result.Succeeded)
+        {
+            var invalidToken = result.Errors.Any(e => e.Code == _userManager.ErrorDescriber.InvalidToken().Code);
+
+            return invalidToken
+                ? SetPasswordResult.Failure(SetPasswordError.InvalidLink)
+                : SetPasswordResult.Failure(
+                    SetPasswordError.PasswordRejected,
+                    result.Errors.Select(e => e.Description).ToList());
+        }
+
+        // Using the emailed link proves the employee controls this inbox.
+        user.EmailConfirmed = true;
+        var updated = await _userManager.UpdateAsync(user);
+        if (!updated.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Could not confirm email for user {user.Id}: {string.Join("; ", updated.Errors.Select(e => e.Description))}");
+        }
+
+        return SetPasswordResult.Success();
+    }
+
+    public async Task ReplaceRolesAsync(
+        Guid userId,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        var current = await _userManager.GetRolesAsync(user);
+        var toRemove = current.Except(roles).ToList();
+        var toAdd = roles.Except(current).ToList();
+
+        if (toRemove.Count > 0)
+        {
+            EnsureSucceeded(await _userManager.RemoveFromRolesAsync(user, toRemove), "remove roles from", userId);
+        }
+
+        if (toAdd.Count > 0)
+        {
+            EnsureSucceeded(await _userManager.AddToRolesAsync(user, toAdd), "add roles to", userId);
+        }
+    }
+
+    public async Task<SetLoginActiveResult> SetLoginActiveAsync(
+        Guid userId,
+        bool isActive,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        if (user.IsActive == isActive)
+        {
+            return SetLoginActiveResult.Succeeded;
+        }
+
+        user.IsActive = isActive;
+
+        if (!isActive)
+        {
+            // A new security stamp invalidates outstanding invite / set-password links.
+            await _userManager.UpdateSecurityStampAsync(user);
+        }
+
+        try
+        {
+            EnsureSucceeded(await _userManager.UpdateAsync(user), "update", userId);
+        }
+        catch (DbUpdateException ex) when (IsActiveEmailViolation(ex))
+        {
+            // Activating would give the email two active accounts; the database refuses.
+            _logger.LogWarning(
+                "Login {UserId} not reactivated: email already active on another account", userId);
+
+            _dbContext.Entry(user).State = EntityState.Detached;
+            return SetLoginActiveResult.EmailInUse;
+        }
+
+        return SetLoginActiveResult.Succeeded;
+    }
+
+    public async Task<int> CountActiveAdministratorsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var administrator = _userManager.NormalizeName(EmployeeRoles.Administrator);
+
+        // Login accounts have no tenant query filter (see CLAUDE.md), so filter by tenant explicitly.
+        return await (
+                from userRole in _dbContext.UserRoles
+                join role in _dbContext.Roles on userRole.RoleId equals role.Id
+                join user in _dbContext.Users on userRole.UserId equals user.Id
+                where user.TenantId == tenantId
+                      && user.IsActive
+                      && role.NormalizedName == administrator
+                select user.Id)
+            .CountAsync(cancellationToken);
+    }
+
+    /// <summary>Identity reports failures as results; for these calls a failure is a bug.</summary>
+    private static void EnsureSucceeded(IdentityResult result, string action, Guid userId)
+    {
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Could not {action} user {userId}: {string.Join("; ", result.Errors.Select(e => e.Description))}");
+        }
+    }
+
+    public async Task<bool> HasPasswordAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        return await _userManager.HasPasswordAsync(user);
+    }
+
+    /// <param name="password">Null for an invited user, who sets it later via the emailed link.</param>
+    private async Task<CreateUserResult> CreateAsync(
+        Guid tenantId,
+        string email,
+        string? password,
+        IReadOnlyCollection<string> roles)
     {
         var user = new ApplicationUser
         {
@@ -45,7 +214,9 @@ public class IdentityService : IIdentityService
         IdentityResult created;
         try
         {
-            created = await _userManager.CreateAsync(user, password);
+            created = password is null
+                ? await _userManager.CreateAsync(user)
+                : await _userManager.CreateAsync(user, password);
         }
         catch (DbUpdateException ex) when (IsActiveEmailViolation(ex))
         {
@@ -72,12 +243,13 @@ public class IdentityService : IIdentityService
                 created.Errors.Select(e => e.Description).ToList());
         }
 
-        var assigned = await _userManager.AddToRoleAsync(user, role);
+        var assigned = await _userManager.AddToRolesAsync(user, roles);
         if (!assigned.Succeeded)
         {
-            // Roles are seeded by migration; a missing role is a bug, not user error.
+            // Roles are validated at the API boundary and seeded by migration;
+            // failing here is a bug, not user error.
             throw new InvalidOperationException(
-                $"Could not assign role '{role}': {string.Join("; ", assigned.Errors.Select(e => e.Description))}");
+                $"Could not assign roles '{string.Join(", ", roles)}': {string.Join("; ", assigned.Errors.Select(e => e.Description))}");
         }
 
         return CreateUserResult.Success(user.Id);
@@ -122,6 +294,38 @@ public class IdentityService : IIdentityService
 
         var roles = await _userManager.GetRolesAsync(user);
         return CredentialCheckResult.Success(user.Id, user.TenantId, roles.ToList());
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, LoginInfo>> GetLoginInfoAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (userIds.Count == 0)
+        {
+            return new Dictionary<Guid, LoginInfo>();
+        }
+
+        // Two queries in total, however many employees: emails, then all their role names.
+        var emails = await _dbContext.Users
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.Email })
+            .ToListAsync(cancellationToken);
+
+        var roles = await (
+                from userRole in _dbContext.UserRoles
+                join role in _dbContext.Roles on userRole.RoleId equals role.Id
+                where userIds.Contains(userRole.UserId)
+                select new { userRole.UserId, role.Name })
+            .ToListAsync(cancellationToken);
+
+        var rolesByUser = roles
+            .GroupBy(r => r.UserId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(r => r.Name!).Order().ToList());
+
+        return emails.ToDictionary(
+            u => u.Id,
+            u => new LoginInfo(u.Email, rolesByUser.GetValueOrDefault(u.Id, [])));
     }
 
     private static bool IsActiveEmailViolation(DbUpdateException ex) =>
