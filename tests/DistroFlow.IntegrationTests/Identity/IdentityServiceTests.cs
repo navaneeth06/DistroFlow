@@ -133,6 +133,46 @@ public class IdentityServiceTests : IClassFixture<ApiIntegrationTestFactory>
         Assert.True(await userManager.CheckPasswordAsync(user, ValidPassword));
     }
 
+    [Fact]
+    public async Task ReplaceRoles_adds_missing_and_removes_unlisted_roles()
+    {
+        var tenant = await CreateTenantAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+        var created = await service.CreateInvitedUserAsync(
+            tenant.Id, UniqueEmail(), [EmployeeRoles.SalesStaff, EmployeeRoles.Approver]);
+
+        await service.ReplaceRolesAsync(created.UserId!.Value, [EmployeeRoles.Approver, EmployeeRoles.DispatchStaff]);
+
+        var user = (await userManager.FindByIdAsync(created.UserId.Value.ToString()))!;
+        Assert.Equal(
+            [EmployeeRoles.Approver, EmployeeRoles.DispatchStaff],
+            (await userManager.GetRolesAsync(user)).Order());
+    }
+
+    [Fact]
+    public async Task CountActiveAdministrators_counts_only_active_admins_of_that_tenant()
+    {
+        var tenant = await CreateTenantAsync();
+        var otherTenant = await CreateTenantAsync();
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IIdentityService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await service.CreateInvitedUserAsync(tenant.Id, UniqueEmail(), [EmployeeRoles.Administrator]);          // counted
+        await service.CreateInvitedUserAsync(tenant.Id, UniqueEmail(), [EmployeeRoles.SalesStaff]);             // not an admin
+        await service.CreateInvitedUserAsync(otherTenant.Id, UniqueEmail(), [EmployeeRoles.Administrator]);     // other tenant
+        var inactive = await service.CreateInvitedUserAsync(tenant.Id, UniqueEmail(), [EmployeeRoles.Administrator]);
+        (await db.Users.SingleAsync(u => u.Id == inactive.UserId)).IsActive = false;                          // inactive
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, await service.CountActiveAdministratorsAsync(tenant.Id));
+    }
+
     private static string UniqueEmail() => $"user-{Guid.NewGuid():N}@example.com";
 
     private async Task<Tenant> CreateTenantAsync()

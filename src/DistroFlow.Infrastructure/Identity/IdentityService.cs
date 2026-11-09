@@ -1,4 +1,5 @@
 using DistroFlow.Application.Interfaces.Identity;
+using DistroFlow.Domain.Constants;
 using DistroFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -92,6 +93,57 @@ public class IdentityService : IIdentityService
         }
 
         return SetPasswordResult.Success();
+    }
+
+    public async Task ReplaceRolesAsync(
+        Guid userId,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new InvalidOperationException($"User {userId} not found.");
+
+        var current = await _userManager.GetRolesAsync(user);
+        var toRemove = current.Except(roles).ToList();
+        var toAdd = roles.Except(current).ToList();
+
+        if (toRemove.Count > 0)
+        {
+            EnsureSucceeded(await _userManager.RemoveFromRolesAsync(user, toRemove), "remove roles from", userId);
+        }
+
+        if (toAdd.Count > 0)
+        {
+            EnsureSucceeded(await _userManager.AddToRolesAsync(user, toAdd), "add roles to", userId);
+        }
+    }
+
+    public async Task<int> CountActiveAdministratorsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var administrator = _userManager.NormalizeName(EmployeeRoles.Administrator);
+
+        // Login accounts have no tenant query filter (see CLAUDE.md), so filter by tenant explicitly.
+        return await (
+                from userRole in _dbContext.UserRoles
+                join role in _dbContext.Roles on userRole.RoleId equals role.Id
+                join user in _dbContext.Users on userRole.UserId equals user.Id
+                where user.TenantId == tenantId
+                      && user.IsActive
+                      && role.NormalizedName == administrator
+                select user.Id)
+            .CountAsync(cancellationToken);
+    }
+
+    /// <summary>Identity reports failures as results; for these calls a failure is a bug.</summary>
+    private static void EnsureSucceeded(IdentityResult result, string action, Guid userId)
+    {
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Could not {action} user {userId}: {string.Join("; ", result.Errors.Select(e => e.Description))}");
+        }
     }
 
     public async Task<bool> HasPasswordAsync(

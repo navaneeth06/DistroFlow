@@ -44,6 +44,17 @@ public interface IIdentityService
         string newPassword,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Makes the user's roles exactly <paramref name="roles"/> (adds missing, removes others).</summary>
+    Task ReplaceRolesAsync(
+        Guid userId,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Number of active logins in the tenant that have the Administrator role.</summary>
+    Task<int> CountActiveAdministratorsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>False for an invited user who has not set their password yet.</summary>
     Task<bool> HasPasswordAsync(
         Guid userId,
