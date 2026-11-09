@@ -124,6 +124,38 @@ public class IdentityService : IIdentityService
         return CredentialCheckResult.Success(user.Id, user.TenantId, roles.ToList());
     }
 
+    public async Task<IReadOnlyDictionary<Guid, LoginInfo>> GetLoginInfoAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (userIds.Count == 0)
+        {
+            return new Dictionary<Guid, LoginInfo>();
+        }
+
+        // Two queries in total, however many employees: emails, then all their role names.
+        var emails = await _dbContext.Users
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.Email })
+            .ToListAsync(cancellationToken);
+
+        var roles = await (
+                from userRole in _dbContext.UserRoles
+                join role in _dbContext.Roles on userRole.RoleId equals role.Id
+                where userIds.Contains(userRole.UserId)
+                select new { userRole.UserId, role.Name })
+            .ToListAsync(cancellationToken);
+
+        var rolesByUser = roles
+            .GroupBy(r => r.UserId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(r => r.Name!).Order().ToList());
+
+        return emails.ToDictionary(
+            u => u.Id,
+            u => new LoginInfo(u.Email, rolesByUser.GetValueOrDefault(u.Id, [])));
+    }
+
     private static bool IsActiveEmailViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException
         {

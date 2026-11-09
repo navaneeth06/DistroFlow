@@ -25,4 +25,12 @@ public interface IIdentityService
         string email,
         string password,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Email and roles for many logins in a fixed number of queries (not one per employee).
+    /// Callers must pass ids of employees already loaded through the tenant filter.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, LoginInfo>> GetLoginInfoAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default);
 }
