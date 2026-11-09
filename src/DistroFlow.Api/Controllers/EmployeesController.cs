@@ -153,6 +153,32 @@ public class EmployeesController : ControllerBase
         };
     }
 
+    /// <summary>A deactivated employee returns and can log in again. Safe to repeat.</summary>
+    [HttpPost("{id:guid}/reactivate")]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _employeeService.ReactivateAsync(id, cancellationToken);
+
+        return result.Error switch
+        {
+            EmployeeStatusChangeError.None => Ok(
+                ApiResponse<EmployeeResponse>.SuccessResponse(result.Response, "Employee reactivated.")),
+
+            EmployeeStatusChangeError.NotFound => NotFound(
+                ApiResponse<object>.FailureResponse("Employee not found.")),
+
+            EmployeeStatusChangeError.NotEditable => Conflict(
+                ApiResponse<object>.FailureResponse("This employee's personal data was erased; their status cannot change.")),
+
+            EmployeeStatusChangeError.EmailInUse => Conflict(
+                ApiResponse<object>.FailureResponse(
+                    "This employee's email is now in use by another account, so they can't be reactivated. " +
+                    "Invite them again with a different email.")),
+
+            _ => throw new InvalidOperationException($"Unhandled reactivate error: {result.Error}")
+        };
+    }
+
     /// <summary>Sends a new set-password link to an employee who has not accepted their invite yet.</summary>
     [HttpPost("{id:guid}/resend-invite")]
     public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)

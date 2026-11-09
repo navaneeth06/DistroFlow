@@ -41,6 +41,14 @@ public interface IEmployeeService
         Guid employeeId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// A deactivated employee returns: they can log in again with their old password.
+    /// Fails if their email is now active at another distributor.
+    /// </summary>
+    Task<EmployeeStatusChangeResult> ReactivateAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Emails a fresh set-password link to an employee who has not accepted yet.</summary>
     Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,

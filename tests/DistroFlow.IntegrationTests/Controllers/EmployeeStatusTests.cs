@@ -116,6 +116,66 @@ public class EmployeeStatusTests : IClassFixture<ApiIntegrationTestFactory>
         }
     }
 
+    [Fact]
+    public async Task Reactivated_employee_can_log_in_again_with_their_old_password()
+    {
+        var owner = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var employee = await InviteAndAcceptAsync(owner, EmployeeRoles.SalesStaff);
+        await PostAsync(owner, $"{employee.Id}/deactivate");
+
+        var response = await PostAsync(owner, $"{employee.Id}/reactivate");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        Assert.Equal("Active", data.GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await LoginAsync(employee.Email)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Reactivating_an_active_employee_is_safe()
+    {
+        var owner = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var employee = await InviteAndAcceptAsync(owner, EmployeeRoles.SalesStaff);
+
+        var response = await PostAsync(owner, $"{employee.Id}/reactivate");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Reactivating_fails_when_the_email_is_now_active_at_another_distributor()
+    {
+        // The person left the old job, joined another distributor, then the old one tries to bring them back.
+        var oldEmployer = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var employee = await InviteAndAcceptAsync(oldEmployer, EmployeeRoles.SalesStaff);
+        await PostAsync(oldEmployer, $"{employee.Id}/deactivate");
+        var newEmployer = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        Assert.Equal(HttpStatusCode.Created, (await InviteAsync(newEmployer, employee.Email, EmployeeRoles.SalesStaff)).StatusCode);
+
+        var response = await PostAsync(oldEmployer, $"{employee.Id}/reactivate");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // Nothing changed at the old employer: still deactivated (the employee change was rolled back).
+        var atOldEmployer = (await TestAuth.CreateClientWithToken(_factory, oldEmployer.AccessToken)
+            .GetFromJsonAsync<JsonElement>($"/api/v1/employees/{employee.Id}")).GetProperty("data");
+        Assert.Equal("Deactivated", atOldEmployer.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Reactivating_another_distributors_employee_returns_404()
+    {
+        var a = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var b = await TestAuth.RegisterAndLoginAsync(_anonymous);
+        var employeeOfB = await InviteAndAcceptAsync(b, EmployeeRoles.SalesStaff);
+        await PostAsync(b, $"{employeeOfB.Id}/deactivate");
+
+        var response = await PostAsync(a, $"{employeeOfB.Id}/reactivate");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(employeeOfB.Email)).StatusCode);
+    }
+
     private sealed record AcceptedEmployee(Guid Id, string Email);
 
     /// <summary>Invites an employee and sets their password via the emailed link, like a real person would.</summary>

@@ -223,6 +223,45 @@ public class EmployeeService : IEmployeeService
         return EmployeeStatusChangeResult.Success(MapToResponse(employee, logins));
     }
 
+    public async Task<EmployeeStatusChangeResult> ReactivateAsync(
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        // No tenant lock needed: reactivating can only add administrators, never remove the
+        // last one. The one race that matters (email taken meanwhile) is caught by the
+        // database's unique index on active emails.
+        await using var transaction = await _unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var employee = await _employeeRepository.GetByIdAsync(employeeId, cancellationToken);
+        if (employee is null)
+            return EmployeeStatusChangeResult.Failure(EmployeeStatusChangeError.NotFound);
+
+        if (employee.Status == EmployeeStatus.Anonymised || employee.UserId is not { } userId)
+            return EmployeeStatusChangeResult.Failure(EmployeeStatusChangeError.NotEditable);
+
+        if (employee.Status == EmployeeStatus.Active)
+        {
+            // Already active: nothing to do (repeating the request is safe).
+            var current = await _identityService.GetLoginInfoAsync([userId], cancellationToken);
+            return EmployeeStatusChangeResult.Success(MapToResponse(employee, current));
+        }
+
+        employee.Reactivate(DateTime.UtcNow);
+
+        if (await _identityService.SetLoginActiveAsync(userId, isActive: true, cancellationToken)
+            == SetLoginActiveResult.EmailInUse)
+        {
+            // Leaving without commit rolls back the employee change too.
+            return EmployeeStatusChangeResult.Failure(EmployeeStatusChangeError.EmailInUse);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var logins = await _identityService.GetLoginInfoAsync([userId], cancellationToken);
+        return EmployeeStatusChangeResult.Success(MapToResponse(employee, logins));
+    }
+
     public async Task<ResendInviteResult> ResendInviteAsync(
         Guid employeeId,
         CancellationToken cancellationToken = default)
